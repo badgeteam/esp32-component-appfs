@@ -57,8 +57,6 @@ static bool find_appfs_part(size_t *pos, size_t *len) {
 	return found;
 }
 
-
-
 /*
  * We arrive here after the ROM bootloader finished loading this second stage bootloader from flash.
  * The hardware is mostly uninitialized, flash cache is down and the app CPU is in reset.
@@ -71,6 +69,7 @@ void __attribute__((noreturn)) call_start_cpu0(void)
 		bootloader_reset();
 	}
 
+	int boot_index = INVALID_INDEX;
 	bootloader_state_t bs = {0};
 	if (!bootloader_utility_load_partition_table(&bs)) {
 		ESP_LOGE(TAG, "load partition table error!");
@@ -93,16 +92,10 @@ void __attribute__((noreturn)) call_start_cpu0(void)
 	}
 	ESP_LOGI(TAG, "AppFs initialized");
 	
-	int app=appfs_get_new_app();
-	appfs_handle_t handle=0;
-	if (app<0) {
-		//Load default app
-		handle=appfsOpen("chooser.app");
-	} else {
-		handle=app;
-	}
+	appfs_handle_t handle = appfs_get_new_app();
+
 	if (handle==APPFS_INVALID_FD) {
-		ESP_LOGE(TAG, "Couldn't open app (%d)!", app);
+		ESP_LOGW(TAG, "No AppFS app selected or failed to open app, starting launcher (%d)!", handle);
 		appfsBlDeinit();
 		goto error;
 	}
@@ -124,13 +117,20 @@ void __attribute__((noreturn)) call_start_cpu0(void)
 	//Still here? Must be an error.
 error:
 	//Try to fallback to factory part
-	bootloader_utility_load_boot_image(&bs, -1);
+	//bootloader_utility_load_boot_image(&bs, -1);
+	
+	// Select the number of boot partition
+    boot_index = bootloader_utility_get_selected_boot_partition(&bs);
+    if (boot_index == INVALID_INDEX) {
+        bootloader_reset();
+    }
+
+    // 3. Load the app image for booting
+    bootloader_utility_load_boot_image(&bs, boot_index);
 
 	ESP_LOGE(TAG, "Bootloader end");
 	bootloader_reset();
 }
-
-
 
 // Return global reent struct if any newlib functions are linked to bootloader
 struct _reent *__getreent(void)
