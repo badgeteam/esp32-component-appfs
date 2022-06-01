@@ -745,9 +745,18 @@ esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len) 
 		page=appfsMeta[appfsActiveMeta].page[page].next;
 		start-=APPFS_SECTOR_SZ;
 	}
+
+	if (start != 0) {
+		ESP_LOGE(TAG, "Misaligned write, writes have to be aligned to multiples of %u bytes", APPFS_SECTOR_SZ);
+		return ESP_FAIL;
+	}
+
 	while (len>0) {
 		size_t size=len;
 		if (size+start>APPFS_SECTOR_SZ) size=APPFS_SECTOR_SZ-start;
+		ESP_LOGD(TAG, "Erasing page %d...", page);
+		r=esp_partition_erase_range(appfsPart, (page+1)*APPFS_SECTOR_SZ, APPFS_SECTOR_SZ);
+		if (r!=ESP_OK) return r;
 		ESP_LOGD(TAG, "Writing to page %d offset %d size %d", page, start, size);
 		r=esp_partition_write(appfsPart, (page+1)*APPFS_SECTOR_SZ+start, buf, size);
 		if (r!=ESP_OK) return r;
