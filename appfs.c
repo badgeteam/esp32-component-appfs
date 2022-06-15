@@ -94,11 +94,13 @@ typedef struct  __attribute__ ((__packed__)) {
 } AppfsHeader;
 
 typedef struct  __attribute__ ((__packed__)) {
-	char name[112]; //Only set for 1st sector of file. Rest has name set to 0xFF 0xFF ...
+	char name[48]; //Only set for 1st sector of file. Rest has name set to 0xFF 0xFF ...
+	char title[64]; //Only set for 1st sector of file. Rest has title set to 0xFF 0xFF ...
 	uint32_t size; //in bytes
 	uint8_t next; //next page containing the next 64K of the file; 0 if no next page (Because allocation always starts at 0 and pages can't refer to a lower page, 0 can never occur normally)
 	uint8_t used; //one of APPFS_USE_*
-	uint8_t reserved[10];
+	uint16_t version; // Only set for 1st sector of fiel. Rest has version set to 0xFFFF
+	uint8_t reserved[8];
 } AppfsPageInfo;
 
 typedef struct  __attribute__ ((__packed__)) {
@@ -211,6 +213,20 @@ void appfsClose(appfs_handle_t handle) {
 
 void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size) {
 	if (name) *name=appfsMeta[appfsActiveMeta].page[fd].name;
+	if (size) *size=appfsMeta[appfsActiveMeta].page[fd].size;
+}
+
+void appfsEntryInfoExt(appfs_handle_t fd, const char **name, const char **title, uint16_t* version, int *size) {
+	if (name) *name=appfsMeta[appfsActiveMeta].page[fd].name;
+	if (title) {
+		if (appfsMeta[appfsActiveMeta].page[fd].version == 0xFFFF) {
+			// Fallback for when file is created without the extra metadata fields set
+			*title=appfsMeta[appfsActiveMeta].page[fd].name;
+		} else {
+			*title=appfsMeta[appfsActiveMeta].page[fd].title;
+		}
+	}
+	if (version) *version=appfsMeta[appfsActiveMeta].page[fd].version;
 	if (size) *size=appfsMeta[appfsActiveMeta].page[fd].size;
 }
 
@@ -575,7 +591,7 @@ esp_err_t appfsRename(const char *from, const char *to) {
 //Allocate space for a new file. Will kill any existing files if needed.
 //Warning: may kill old file but not create new file if new file won't fit on fs, even with old file removed.
 //ToDo: in that case, fail before deleting file.
-esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *handle) {
+esp_err_t appfsCreateFileExt(const char *filename, const char *title, uint16_t version, size_t size, appfs_handle_t *handle) {
 	esp_err_t r;
 	//If there are any references to this file, kill 'em.
 	appfsDeleteFile(filename);
@@ -625,8 +641,12 @@ esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *han
 			//This is part of the file. Rewrite page data to indicate this.
 			memset(&pi, 0xff, sizeof(pi));
 			if (j==first) {
-				//First page. Copy name and size.
-				strcpy(pi.name, filename);
+				//First page. Copy filename, title, version and size.
+				strncpy(pi.name, filename, sizeof(pi.name) - 1);
+				pi.name[sizeof(pi.name)-1] = '\0'; // Explicitly NULL terminate the string
+				strncpy(pi.title, title, sizeof(pi.title) - 1);
+				pi.title[sizeof(pi.title)-1] = '\0'; // Explicitly NULL terminate the string
+				pi.version = version;
 				pi.size=size;
 			}
 			pi.used=APPFS_USE_DATA;
@@ -646,6 +666,10 @@ esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *han
 	if (handle) *handle=first;
 	ESP_LOGD(TAG, "Re-writing meta data done.");
 	return r;
+}
+
+esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *handle) {
+	return appfsCreateFileExt(filename, filename, 0, size, handle);
 }
 
 esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** out_ptr, 
