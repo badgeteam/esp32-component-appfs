@@ -93,6 +93,22 @@ esp_err_t appfsDeleteFile(const char *filename);
 esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *handle);
 
 /**
+ * @brief Create a new file on the appfs (extended)
+ *
+ * Initially, the file will have random contents consisting of whatever used the sectors of
+ * flash it occupies earlier. Note that this function also opens the file and returns a file
+ * descriptor to it if succesful; no need for a separate appfsOpen call.
+ *
+ * @param filename Name of the file to be created
+ * @param title Title of the file to be created
+ * @param version Version of the file to be created
+ * @param size Size of the file, in bytes
+ * @param handle Pointer to an appfs_handle_t which will store the file descriptor of the created file
+ * @return ESP_OK if file successfully deleted, an error otherwise.
+ */
+esp_err_t appfsCreateFileExt(const char *filename, const char *title, uint16_t version, size_t size, appfs_handle_t *handle);
+
+/**
  * @brief Map a file into memory
  *
  * This maps a (portion of a) file into memory, where you can access it as if it was an array of bytes in RAM.
@@ -192,6 +208,26 @@ esp_err_t appfsRename(const char *from, const char *to);
  *             not wanted.
  */
 void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size);
+
+/**
+ * @brief Get file information (extended)
+ *
+ * Given a file descriptor, this returns the name and size of the file. The file descriptor needs
+ * to be valid for this to work.
+ *
+ * @param fd File descriptor
+ * @param name Pointer to a char pointer. This will be pointed at the filename in memory. There is no need
+ *             to free the pointer memory afterwards. Pointer memory is valid while the file exists / is not
+ *             deleted. Can be NULL if name information is not wanted.
+ * @param title Pointer to a char pointer. This will be pointed at the title in memory. There is no need
+ *              to free the pointer memory afterwards. Pointer memory is valid while the file exists / is not
+ *              deleted. Can be NULL if name information is not wanted.
+ * @param version Pointer to an uint16_t where the version of the file will be written, or NULL if this information is
+ *                not wanted.
+ * @param size Pointer to an int where the size of the file will be written, or NULL if this information is
+ *             not wanted.
+ */
+void appfsEntryInfoExt(appfs_handle_t fd, const char **name, const char **title, uint16_t* version, int *size);
 
 /**
  * brief Get the next entry in the appfs.
