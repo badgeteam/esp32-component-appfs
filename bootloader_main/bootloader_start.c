@@ -113,6 +113,7 @@ void __attribute__((noreturn)) call_start_cpu0(void)
 	bs.ota[0].size=appfs_len;
 	bs.app_count=1;
 	//And bingo bango, we can now boot from appfs as if it is the first ota partition.
+	REG_WRITE(RTC_CNTL_STORE0_REG, 0xA6000000 | handle); // Store magic to prevent bootloader from starting app again while keeping app fd in memory
 	bootloader_utility_load_boot_image(&bs, 0);
 	//Still here? Must be an error.
 error:
