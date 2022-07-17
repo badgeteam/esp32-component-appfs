@@ -436,8 +436,30 @@ static esp_err_t writeHdr(AppfsHeader *hdr, int metaNo) {
 	return esp_partition_write(appfsPart, metaNo*APPFS_META_SZ, hdr, sizeof(AppfsHeader));
 }
 
-//Kill all existing filesystem metadata and re-initialize the fs.
-static esp_err_t initializeFs() {
+
+esp_err_t appfsInit(int type, int subtype) {
+	esp_err_t r;
+	//Compile-time sanity check on size of structs
+	_Static_assert(sizeof(AppfsHeader)==APPFS_META_DESC_SZ, "sizeof AppfsHeader != 128bytes");
+	_Static_assert(sizeof(AppfsPageInfo)==APPFS_META_DESC_SZ, "sizeof AppfsPageInfo != 128bytes");
+	_Static_assert(sizeof(AppfsMeta)==APPFS_META_SZ, "sizeof AppfsMeta != APPFS_META_SZ");
+	//Find the indicated partition
+	appfsPart=esp_partition_find_first(type, subtype, NULL);
+	if (!appfsPart) return ESP_ERR_NOT_FOUND;
+	//Memory map the appfs header so we can Do Stuff with it
+	r=esp_partition_mmap(appfsPart, 0, APPFS_SECTOR_SZ, SPI_FLASH_MMAP_DATA, (const void**)&appfsMeta, &appfsMetaMmapHandle);
+	if (r!=ESP_OK) return r;
+	if (findActiveMeta()!=ESP_OK) {
+		//No valid metadata half-sector found. Initialize the first sector.
+		ESP_LOGE(TAG, "No valid meta info found. Re-initializing fs.");
+		r=appfsFormat();
+	}
+	ESP_LOGD(TAG, "Initialized.");
+	return r;
+}
+
+
+esp_err_t appfsFormat() {
 	esp_err_t r;
 	//Kill management sector
 	r=esp_partition_erase_range(appfsPart, 0, APPFS_SECTOR_SZ);
@@ -462,28 +484,6 @@ static esp_err_t initializeFs() {
 	//runtime of this, the CRCs aren't checked and when the device reboots, it'll re-initialize
 	//the fs anyway.
 	appfsActiveMeta=0;
-	return ESP_OK;
-}
-
-
-esp_err_t appfsInit(int type, int subtype) {
-	esp_err_t r;
-	//Compile-time sanity check on size of structs
-	_Static_assert(sizeof(AppfsHeader)==APPFS_META_DESC_SZ, "sizeof AppfsHeader != 128bytes");
-	_Static_assert(sizeof(AppfsPageInfo)==APPFS_META_DESC_SZ, "sizeof AppfsPageInfo != 128bytes");
-	_Static_assert(sizeof(AppfsMeta)==APPFS_META_SZ, "sizeof AppfsMeta != APPFS_META_SZ");
-	//Find the indicated partition
-	appfsPart=esp_partition_find_first(type, subtype, NULL);
-	if (!appfsPart) return ESP_ERR_NOT_FOUND;
-	//Memory map the appfs header so we can Do Stuff with it
-	r=esp_partition_mmap(appfsPart, 0, APPFS_SECTOR_SZ, SPI_FLASH_MMAP_DATA, (const void**)&appfsMeta, &appfsMetaMmapHandle);
-	if (r!=ESP_OK) return r;
-	if (findActiveMeta()!=ESP_OK) {
-		//No valid metadata half-sector found. Initialize the first sector.
-		ESP_LOGE(TAG, "No valid meta info found. Re-initializing fs.");
-		initializeFs();
-	}
-	ESP_LOGD(TAG, "Initialized.");
 	return ESP_OK;
 }
 

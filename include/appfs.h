@@ -36,6 +36,15 @@ typedef int appfs_handle_t;
 esp_err_t appfsInit(int type, int subtype);
 
 /**
+ * @brief Format the appfs partition.
+ *
+ * Kill all existing filesystem metadata and re-initialize the fs.
+ *
+ * @return ESP_OK if all OK, an error from the underlying partition or flash code otherwise.
+ */
+esp_err_t appfsFormat();
+
+/**
  * @brief Check if a file with the given filename exists.
  *
  * @param filename Filename to check
