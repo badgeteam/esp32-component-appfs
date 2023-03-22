@@ -267,6 +267,13 @@ esp_err_t appfsGetCurrentApp(appfs_handle_t *ret_app);
 size_t appfsGetFreeMem();
 
 /**
+ * @brief Get size of appfs partition
+ *
+ * @return size, in bytes
+ */
+size_t appfsGetTotalMem();
+
+/**
  * @brief Debugging function: dump current appfs state
  *
  * Prints state of the appfs to stdout.

@@ -257,6 +257,16 @@ size_t appfsGetFreeMem() {
 	return ret;
 }
 
+size_t appfsGetTotalMem() {
+	size_t ret=0;
+	for (int i=0; i<APPFS_PAGES; i++) {
+		if ((appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE ||  appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_DATA) && page_in_part(i)) {
+			ret+=APPFS_SECTOR_SZ;
+		}
+	}
+	return ret;
+}
+
 #ifdef BOOTLOADER_BUILD
 
 /*
