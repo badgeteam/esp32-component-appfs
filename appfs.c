@@ -75,7 +75,7 @@ is implemented as a singleton.
 static const char *TAG = "appfs";
 
 
-#define APPFS_SECTOR_SZ SPI_FLASH_MMU_PAGE_SIZE
+#define APPFS_SECTOR_SZ 65536
 #define APPFS_META_SZ (APPFS_SECTOR_SZ/2)
 #define APPFS_META_CNT 2
 #define APPFS_META_DESC_SZ 128
@@ -149,7 +149,7 @@ static esp_err_t findActiveMeta() {
 			if (crc==expectedCrc) {
 				validSec|=(1<<sec);
 			} else {
-				ESP_LOGD(TAG, "Meta sector %d does not have a valid CRC (have %X expected %X.", sec, crc, expectedCrc);
+				ESP_LOGD(TAG, "Meta sector %d does not have a valid CRC (have %"PRIX32" expected %"PRIX32".", sec, crc, expectedCrc);
 			}
 		} else {
 			ESP_LOGD(TAG, "Meta sector %d does not have a valid magic header.", sec);
@@ -164,8 +164,8 @@ static esp_err_t findActiveMeta() {
 		}
 	}
 
-	ESP_LOGI(TAG, "Meta page 0: %svalid (serial %d)", (validSec&1)?"":"in", serial[0]);
-	ESP_LOGI(TAG, "Meta page 1: %svalid (serial %d)", (validSec&2)?"":"in", serial[1]);
+	ESP_LOGI(TAG, "Meta page 0: %svalid (serial %"PRId32")", (validSec&1)?"":"in", serial[0]);
+	ESP_LOGI(TAG, "Meta page 1: %svalid (serial %"PRId32")", (validSec&2)?"":"in", serial[1]);
 
 	//'best' here is either still -1 (no valid sector found) or the sector with the highest valid serial.
 	if (best==-1) {
@@ -687,16 +687,16 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 	esp_err_t r;
 	int page=(int)fd;
 	if (!appfsFdValid(page)) return ESP_ERR_NOT_FOUND;
-	ESP_LOGD(TAG, "Mmapping file %s, offset %d, size %d", appfsMeta[appfsActiveMeta].page[page].name, offset, len);
+	ESP_LOGD(TAG, "Mmapping file %s, offset %zd, size %zd", appfsMeta[appfsActiveMeta].page[page].name, offset, len);
 	if (appfsMeta[appfsActiveMeta].page[page].size < (offset+len)) {
-		ESP_LOGD(TAG, "Can't map file: trying to map byte %d in file of len %d\n", (offset+len), appfsMeta[appfsActiveMeta].page[page].size);
+		ESP_LOGD(TAG, "Can't map file: trying to map byte %zu in file of len %"PRIu32"\n", (offset+len), appfsMeta[appfsActiveMeta].page[page].size);
 		return ESP_ERR_INVALID_SIZE;
 	}
 	int dataStartPage=(appfsPart->address/SPI_FLASH_MMU_PAGE_SIZE)+1;
 	while (offset >= APPFS_SECTOR_SZ) {
 		page=appfsMeta[appfsActiveMeta].page[page].next;
 		offset-=APPFS_SECTOR_SZ;
-		ESP_LOGD(TAG, "Skipping a page (to page %d), remaining offset 0x%X", page, offset);
+		ESP_LOGD(TAG, "Skipping a page (to page %d), remaining offset 0x%zX", page, offset);
 	}
 
 	int *pages=alloca(sizeof(int)*((len/APPFS_SECTOR_SZ)+1));
@@ -782,7 +782,7 @@ esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len) 
 	while (len>0) {
 		size_t size=len;
 		if (size+start>APPFS_SECTOR_SZ) size=APPFS_SECTOR_SZ-start;
-		ESP_LOGD(TAG, "Writing to page %d offset %d size %d", page, start, size);
+		ESP_LOGD(TAG, "Writing to page %d offset %zu size %zu", page, start, size);
 		r=esp_partition_write(appfsPart, (page+1)*APPFS_SECTOR_SZ+start, buf, size);
 		if (r!=ESP_OK) return r;
 		page=appfsMeta[appfsActiveMeta].page[page].next;
