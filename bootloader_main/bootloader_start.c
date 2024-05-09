@@ -15,6 +15,7 @@
 #include "appfs.h"
 #include "bootloader_flash_priv.h"
 #include "appfs_flashfunctions_wrapper.h"
+#include "soc/rtc_cntl_reg.h"
 
 static const char *TAG="bootloader";
 

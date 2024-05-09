@@ -21,7 +21,11 @@ in the loader segment instead of in random IRAM.
 #include "esp_log.h"
 #include "esp_attr.h"
 #include "esp_app_format.h"
+#if ESP_IDF_VERSION_MAJOR > 4
+#include "esp_memory_utils.h"
+#else
 #include "soc/soc_memory_types.h"
+#endif
 #include "soc/soc_caps.h"
 #include <string.h>
 #include "soc/dport_reg.h"

@@ -9,9 +9,17 @@
 
 #pragma once
 
-#include "esp_err.h"
 #include <stdint.h>
+
+#include "esp_err.h"
+#include "esp_idf_version.h"
+#if ESP_IDF_VERSION_MAJOR > 4
+#include "spi_flash_mmap.h"
+#else
 #include "esp_spi_flash.h"
+#endif
+
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +51,14 @@ esp_err_t appfsInit(int type, int subtype);
  * @return ESP_OK if all OK, an error from the underlying partition or flash code otherwise.
  */
 esp_err_t appfsFormat();
+
+/**
+ * @brief Select the file to boot upon next restart.
+ * 
+ * @param fd File descriptor to boot
+ * @returns True if the file is valid an successfully selected to boot
+ */
+bool appfsBootSelect(appfs_handle_t fd);
 
 /**
  * @brief Check if a file with the given filename exists.

@@ -1,6 +1,14 @@
 
-idf_component_register(SRC_DIRS .
-        REQUIRES log spi_flash bootloader_support
-        INCLUDE_DIRS . include )
+set(appfs_requires spi_flash bootloader_support)
+
+if(NOT BOOTLOADER_BUILD AND ${IDF_VERSION_MAJOR} GREATER 4)
+    set(appfs_requires ${appfs_requires} esp_partition)
+endif()
+
+idf_component_register(
+    SRC_DIRS "src"
+    INCLUDE_DIRS "include"
+    REQUIRES ${appfs_requires}
+)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -DPROJECT_NAME="${CMAKE_PROJECT_NAME}")

@@ -53,19 +53,24 @@ is implemented as a singleton.
 
 */
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <alloca.h>
-#include <rom/crc.h>
-#include "esp_spi_flash.h"
-#include "esp_partition.h"
-#include "esp_log.h"
-#include "esp_err.h"
 #include "appfs.h"
-#include "rom/cache.h"
+
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "esp_err.h"
+#include "esp_log.h"
 #include "sdkconfig.h"
+#ifndef BOOTLOADER_BUILD
+#include "soc/rtc_cntl_reg.h"
+#include "esp_partition.h"
+#endif
+
+#include "rom/cache.h"
+#include "rom/crc.h"
+
 
 
 #if !CONFIG_SPI_FLASH_WRITING_DANGEROUS_REGIONS_ALLOWED
@@ -149,7 +154,7 @@ static esp_err_t findActiveMeta() {
 			if (crc==expectedCrc) {
 				validSec|=(1<<sec);
 			} else {
-				ESP_LOGD(TAG, "Meta sector %d does not have a valid CRC (have %X expected %X.", sec, crc, expectedCrc);
+				ESP_LOGD(TAG, "Meta sector %d does not have a valid CRC (have %"PRIX32" expected %"PRIX32".", sec, crc, expectedCrc);
 			}
 		} else {
 			ESP_LOGD(TAG, "Meta sector %d does not have a valid magic header.", sec);
@@ -164,8 +169,8 @@ static esp_err_t findActiveMeta() {
 		}
 	}
 
-	ESP_LOGI(TAG, "Meta page 0: %svalid (serial %d)", (validSec&1)?"":"in", serial[0]);
-	ESP_LOGI(TAG, "Meta page 1: %svalid (serial %d)", (validSec&2)?"":"in", serial[1]);
+	ESP_LOGI(TAG, "Meta page 0: %svalid (serial %"PRId32")", (validSec&1)?"":"in", serial[0]);
+	ESP_LOGI(TAG, "Meta page 1: %svalid (serial %"PRId32")", (validSec&2)?"":"in", serial[1]);
 
 	//'best' here is either still -1 (no valid sector found) or the sector with the highest valid serial.
 	if (best==-1) {
@@ -351,7 +356,7 @@ IRAM_ATTR esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int n
 		uint32_t p=regions[i].fileAddr/APPFS_SECTOR_SZ;
 		uint32_t d=regions[i].mapAddr&~(APPFS_SECTOR_SZ-1);
 		for (uint32_t a=0; a<regions[i].length; a+=APPFS_SECTOR_SZ) {
-			ESP_LOGI(TAG, "Flash mmap seg %d: %X from %X", i, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ));
+			ESP_LOGI(TAG, "Flash mmap seg %d: %"PRIX32" from %"PRIX32, i, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ));
 			for (int cpu=0; cpu<2; cpu++) {
 				int e = cache_flash_mmu_set(cpu, 0, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ), 64, 1);
 				if (e != 0) {
@@ -466,6 +471,13 @@ esp_err_t appfsInit(int type, int subtype) {
 	}
 	ESP_LOGD(TAG, "Initialized.");
 	return r;
+}
+
+
+bool appfsBootSelect(appfs_handle_t fd) {
+	if (!appfsFdValid(fd)) return false;
+	REG_WRITE(RTC_CNTL_STORE0_REG, 0xA5000000 | fd);
+	return true;
 }
 
 
@@ -687,16 +699,16 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 	esp_err_t r;
 	int page=(int)fd;
 	if (!appfsFdValid(page)) return ESP_ERR_NOT_FOUND;
-	ESP_LOGD(TAG, "Mmapping file %s, offset %d, size %d", appfsMeta[appfsActiveMeta].page[page].name, offset, len);
+	ESP_LOGD(TAG, "Mmapping file %s, offset %zu, size %zu", appfsMeta[appfsActiveMeta].page[page].name, offset, len);
 	if (appfsMeta[appfsActiveMeta].page[page].size < (offset+len)) {
-		ESP_LOGD(TAG, "Can't map file: trying to map byte %d in file of len %d\n", (offset+len), appfsMeta[appfsActiveMeta].page[page].size);
+		ESP_LOGD(TAG, "Can't map file: trying to map byte %zu in file of len %"PRId32, (offset+len), appfsMeta[appfsActiveMeta].page[page].size);
 		return ESP_ERR_INVALID_SIZE;
 	}
 	int dataStartPage=(appfsPart->address/SPI_FLASH_MMU_PAGE_SIZE)+1;
 	while (offset >= APPFS_SECTOR_SZ) {
 		page=appfsMeta[appfsActiveMeta].page[page].next;
 		offset-=APPFS_SECTOR_SZ;
-		ESP_LOGD(TAG, "Skipping a page (to page %d), remaining offset 0x%X", page, offset);
+		ESP_LOGD(TAG, "Skipping a page (to page %d), remaining offset 0x%zX", page, offset);
 	}
 
 	int *pages=alloca(sizeof(int)*((len/APPFS_SECTOR_SZ)+1));
@@ -711,7 +723,7 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 
 	r=spi_flash_mmap_pages(pages, nopages, memory, out_ptr, out_handle);
 	if (r!=ESP_OK) {
-		ESP_LOGD(TAG, "Can't map file: pi_flash_mmap_pages returned %d\n", r);
+		ESP_LOGD(TAG, "Can't map file: spi_flash_mmap_pages returned %d", r);
 		return r;
 	}
 	*out_ptr=((uint8_t*)*out_ptr)+offset;
@@ -757,7 +769,7 @@ esp_err_t appfsErase(appfs_handle_t fd, size_t start, size_t len) {
 		size_t size=len;
 		//Make sure we do not go over a page boundary
 		if ((size+start)>APPFS_SECTOR_SZ) size=APPFS_SECTOR_SZ-start;
-		ESP_LOGD(TAG, "Erasing page %d offset 0x%X size 0x%X", page, start, size);
+		ESP_LOGD(TAG, "Erasing page %d offset 0x%zX size 0x%zX", page, start, size);
 		r=esp_partition_erase_range(appfsPart, (page+1)*APPFS_SECTOR_SZ+start, size);
 		if (r!=ESP_OK) return r;
 		page=appfsMeta[appfsActiveMeta].page[page].next;
@@ -794,16 +806,16 @@ esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len) 
 }
 
 void appfsDump() {
-	printf("AppFsDump: ..=free XX=illegal no=next page\n");
-	for (int i=0; i<16; i++) printf("%02X-", i);
-	printf("\n");
+	printf("AppFsDump: ..=free XX=illegal ##=next page\n");
+	for (int i=0; i<15; i++) printf("%02X-", i);
+	printf("0F\n");
 	for (int i=0; i<APPFS_PAGES; i++) {
 		if (!page_in_part(i)) {
 			printf("  ");
 		} else if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE) {
 			printf("..");
 		} else if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_DATA) {
-			printf("%02X", appfsMeta[appfsActiveMeta].page[i].next);
+			printf("%02"PRIX8, appfsMeta[appfsActiveMeta].page[i].next);
 		} else if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_ILLEGAL) {
 			printf("XX");
 		} else {
@@ -818,7 +830,7 @@ void appfsDump() {
 	printf("\n");
 	for (int i=0; i<APPFS_PAGES; i++) {
 		if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_DATA && appfsMeta[appfsActiveMeta].page[i].name[0]!=0xff) {
-			printf("File %s starts at page %d\n", appfsMeta[appfsActiveMeta].page[i].name, i);
+			printf("File '%s' starts at page %d\n", appfsMeta[appfsActiveMeta].page[i].name, i);
 		}
 	}
 }
