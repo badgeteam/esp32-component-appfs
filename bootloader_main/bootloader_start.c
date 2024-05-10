@@ -32,8 +32,8 @@ static int appfs_get_new_app() {
 	return r&0xff;
 #else
 	// Obtain pointer to retained memory.
-	rtc_retain_mem_t *mem     = (appfs_bootsel_t *) bootloader_common_get_rtc_retain_mem();
-	appfs_bootsel_t  *bootsel = &mem->custom;
+	rtc_retain_mem_t *mem     = bootloader_common_get_rtc_retain_mem();
+	appfs_bootsel_t  *bootsel = (appfs_bootsel_t *) &mem->custom;
 	// Detect bootsel presence.
 	if (bootsel->magic != APPFS_BOOTSEL_MAGIC) {
 		return -1;
@@ -134,8 +134,8 @@ void __attribute__((noreturn)) call_start_cpu0(void)
 	REG_WRITE(RTC_CNTL_STORE0_REG, 0xA6000000 | handle);
 #else
 	// Mark bootsel as invalid to prevent repeated start.
-	rtc_retain_mem_t *mem     = (appfs_bootsel_t *) bootloader_common_get_rtc_retain_mem();
-	appfs_bootsel_t  *bootsel = &mem->custom;
+	rtc_retain_mem_t *mem     = bootloader_common_get_rtc_retain_mem();
+	appfs_bootsel_t  *bootsel = (appfs_bootsel_t *) &mem->custom;
 	bootsel->valid = false;
 #endif
 	bootloader_utility_load_boot_image(&bs, 0);

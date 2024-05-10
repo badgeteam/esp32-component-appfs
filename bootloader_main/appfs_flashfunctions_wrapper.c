@@ -32,8 +32,8 @@ in the loader segment instead of in random IRAM.
 #include "soc/dport_reg.h"
 #include "esp32/rom/cache.h"
 #else
-#include "soc/mmu.h"
-#include "soc/spi_mem_struct.h"
+#include "hal/mmu_ll.h"
+#include "hal/mmu_hal.h"
 #endif
 
 
@@ -117,13 +117,20 @@ static IRAM_ATTR void mmap_and_start_app() {
 		}
 	}
 #else
-	for (int i = 0; i < SOC_MMU_PAGES_PER_REGION; i++) {
-		SPIMEM0.mmu_item_index = i;
-		if (SPIMEM0.mmu_item_content != SOC_MMU_INVALID) {
-			int page=SPIMEM0.mmu_item_content&255;
-			int addr=page*0x10000;
+#ifdef SOC_MMU_FLASH_VALID
+	for (int i = 0; i < SOC_MMU_ENTRY_NUM; i++) {
+		uint32_t entry = mmu_ll_read_entry(MMU_LL_FLASH_MMU_ID, i);
+		if (entry & SOC_MMU_FLASH_VALID) {
+			int page=entry&SOC_MMU_FLASH_VALID_VAL_MASK;
+			int addr=page*SOC_MMU_PAGE_SIZE;
+#else
+	for (int i = 0; i < SOC_MMU_ENTRY_NUM; i++) {
+		uint32_t entry = mmu_ll_read_entry(0, i);
+		if (entry & SOC_MMU_VALID) {
+			int page=entry&SOC_MMU_VALID_VAL_MASK;
+			int addr=page*SOC_MMU_PAGE_SIZE;
+#endif
 			if (addr<ovl_start || addr>ovl_start+ovl_size) {
-				ESP_LOGI(TAG, "%3d, %08x, %08x, %08x", i, addr, (int)ovl_start, (int)ovl_size);
 				ESP_LOGI(TAG, "Not booting appfs app; not adjusting mmu.");
 				return;
 			}
