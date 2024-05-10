@@ -1,4 +1,5 @@
-import binascii, sys
+
+import binascii
 
 APPFS_SECTOR_SIZE = 64 * 1024
 APPFS_META_CNT = 2

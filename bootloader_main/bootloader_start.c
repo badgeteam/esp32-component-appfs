@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifdef BOOTLOADER_BUILD
-
 #include <stdbool.h>
 #include "sdkconfig.h"
 #include "esp_log.h"
@@ -15,17 +13,34 @@
 #include "appfs.h"
 #include "bootloader_flash_priv.h"
 #include "appfs_flashfunctions_wrapper.h"
+#if CONFIG_APPFS_USE_RTC_REG
 #include "soc/rtc_cntl_reg.h"
+#endif
 
 static const char *TAG="bootloader";
+
+
 
 //Copied from kchal, which we don't want to link inhere.
 //See 8bkc-hal/kchal.c for explanation of the bits in the store0 register
 static int appfs_get_new_app() {
+#if CONFIG_APPFS_USE_RTC_REG
+	// Use RTC reg as FD storage.
 	uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
 	ESP_LOGI(TAG, "RTC store0 reg: %x", r);
 	if ((r&0xFF000000)!=0xA5000000) return -1;
 	return r&0xff;
+#else
+	// Obtain pointer to retained memory.
+	rtc_retain_mem_t *mem     = (appfs_bootsel_t *) bootloader_common_get_rtc_retain_mem();
+	appfs_bootsel_t  *bootsel = &mem->custom;
+	// Detect bootsel presence.
+	if (bootsel->magic != APPFS_BOOTSEL_MAGIC) {
+		return -1;
+	}
+	// Obtain FD from retained memory.
+	return bootsel->fd;
+#endif
 }
 
 //Find the position/size of the appfs partition
@@ -114,7 +129,15 @@ void __attribute__((noreturn)) call_start_cpu0(void)
 	bs.ota[0].size=appfs_len;
 	bs.app_count=1;
 	//And bingo bango, we can now boot from appfs as if it is the first ota partition.
-	REG_WRITE(RTC_CNTL_STORE0_REG, 0xA6000000 | handle); // Store magic to prevent bootloader from starting app again while keeping app fd in memory
+#if CONFIG_APPFS_USE_RTC_REG
+	// Store magic to prevent bootloader from starting app again while keeping app fd in memory
+	REG_WRITE(RTC_CNTL_STORE0_REG, 0xA6000000 | handle);
+#else
+	// Mark bootsel as invalid to prevent repeated start.
+	rtc_retain_mem_t *mem     = (appfs_bootsel_t *) bootloader_common_get_rtc_retain_mem();
+	appfs_bootsel_t  *bootsel = &mem->custom;
+	bootsel->valid = false;
+#endif
 	bootloader_utility_load_boot_image(&bs, 0);
 	//Still here? Must be an error.
 error:
@@ -122,13 +145,13 @@ error:
 	//bootloader_utility_load_boot_image(&bs, -1);
 	
 	// Select the number of boot partition
-    boot_index = bootloader_utility_get_selected_boot_partition(&bs);
-    if (boot_index == INVALID_INDEX) {
-        bootloader_reset();
-    }
+	boot_index = bootloader_utility_get_selected_boot_partition(&bs);
+	if (boot_index == INVALID_INDEX) {
+		bootloader_reset();
+	}
 
-    // 3. Load the app image for booting
-    bootloader_utility_load_boot_image(&bs, boot_index);
+	// 3. Load the app image for booting
+	bootloader_utility_load_boot_image(&bs, boot_index);
 
 	ESP_LOGE(TAG, "Bootloader end");
 	bootloader_reset();
@@ -139,5 +162,3 @@ struct _reent *__getreent(void)
 {
 	return _GLOBAL_REENT;
 }
-
-#endif

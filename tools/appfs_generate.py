@@ -1,8 +1,10 @@
-import binascii, sys, appfs
+#!/usr/bin/env python3
+
+import sys, appfs
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: " + sys.argv[0] + " <size> <filename>")
+        print("Usage: " + sys.argv[0] + " <size in bytes> <filename>")
         sys.exit(1)
     
     fs = appfs.AppFS(int(sys.argv[1]))

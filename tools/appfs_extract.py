@@ -1,4 +1,6 @@
-import binascii, sys, appfs
+#!/usr/bin/env python3
+
+import sys, appfs
 
 def openAppfs(filename):
     print(filename)

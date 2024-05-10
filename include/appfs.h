@@ -32,6 +32,20 @@ typedef int appfs_handle_t;
 
 #define APPFS_INVALID_FD -1			/*<! Some functions return this to indicate an error situation */
 
+#define APPFS_MAX_ARG_LENGTH 127
+#define APPFS_BOOTSEL_MAGIC 0x2af7de4a994f7236
+typedef struct {
+	// Identifies AppFS boot select structure.
+	uint64_t       magic;
+	// App to boot.
+	appfs_handle_t fd;
+	// Whether this app is still allowed to boot.
+	// If false but magic is valid, it is assumed the app crashed.
+	bool           valid;
+	// Arbitrary data to send to the app.
+	char           arg[APPFS_MAX_ARG_LENGTH+1];
+} appfs_bootsel_t;
+
 /**
  * @brief Initialize the appfs code and mount the appfs partition.
  *
@@ -54,11 +68,23 @@ esp_err_t appfsFormat();
 
 /**
  * @brief Select the file to boot upon next restart.
+ * If the argument is too long (`APPFS_MAX_ARG_LENGTH`), it is discarded entirely.
  * 
  * @param fd File descriptor to boot
- * @returns True if the file is valid an successfully selected to boot
+ * @param arg Arbitrary data to send to app
+ * @returns True if the file is valid and successfully selected to boot
  */
-bool appfsBootSelect(appfs_handle_t fd);
+bool appfsBootSelect(appfs_handle_t fd, char const *arg);
+
+/**
+ * @brief Read data from boot select.
+ * Does not initialize outputs if boot select is not found.
+ * 
+ * @param valid Optional pointer to valid flag
+ * @param arg Optional pointer to argument pointer
+ * @returns File descriptor if boot select was found, -1 if not
+ */
+appfs_handle_t appfsBootselGet(bool *valid, char const **arg);
 
 /**
  * @brief Check if a file with the given filename exists.

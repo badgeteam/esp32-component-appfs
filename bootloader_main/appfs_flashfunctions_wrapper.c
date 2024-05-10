@@ -28,8 +28,13 @@ in the loader segment instead of in random IRAM.
 #endif
 #include "soc/soc_caps.h"
 #include <string.h>
+#if CONFIG_IDF_TARGET_ESP32
 #include "soc/dport_reg.h"
 #include "esp32/rom/cache.h"
+#else
+#include "soc/mmu.h"
+#include "soc/spi_mem_struct.h"
+#endif
 
 
 static const char *TAG="appfs_wrapper";
@@ -100,6 +105,7 @@ static IRAM_ATTR void mmap_and_start_app() {
 	//got corrupted), the previous routine will fall back to e.g. the factory app. If we would
 	//adjust the MMU assuming the appfs app had loaded, we would crash.
 	//Note that this is ESP32-specific.
+#if CONFIG_IDF_TARGET_ESP32
 	for (int i = 0; i < DPORT_FLASH_MMU_TABLE_SIZE; i++) {
 		if (DPORT_PRO_FLASH_MMU_TABLE[i] != DPORT_FLASH_MMU_TABLE_INVALID_VAL) {
 			int page=DPORT_PRO_FLASH_MMU_TABLE[i]&255;
@@ -110,6 +116,20 @@ static IRAM_ATTR void mmap_and_start_app() {
 			}
 		}
 	}
+#else
+	for (int i = 0; i < SOC_MMU_PAGES_PER_REGION; i++) {
+		SPIMEM0.mmu_item_index = i;
+		if (SPIMEM0.mmu_item_content != SOC_MMU_INVALID) {
+			int page=SPIMEM0.mmu_item_content&255;
+			int addr=page*0x10000;
+			if (addr<ovl_start || addr>ovl_start+ovl_size) {
+				ESP_LOGI(TAG, "%3d, %08x, %08x, %08x", i, addr, (int)ovl_start, (int)ovl_size);
+				ESP_LOGI(TAG, "Not booting appfs app; not adjusting mmu.");
+				return;
+			}
+		}
+	}
+#endif
 
 	//Undo bootloader mapping. If we don't call this, the rest of the code thinks there's still
 	//something mapped. Note that for now the address doesn't matter, we feed it 0.
@@ -145,6 +165,7 @@ static IRAM_ATTR void mmap_and_start_app() {
 	appfsBlMapRegions(file_handle, mapRegions, noMaps);
 
 	ESP_LOGD(TAG, "Appfs MMU adjustments done. Starting app at 0x%08x", entry_addr);
+	__real_bootloader_console_deinit();
 	typedef void (*entry_t)(void);
 	entry_t entry = ((entry_t) entry_addr);
 	(*entry)();

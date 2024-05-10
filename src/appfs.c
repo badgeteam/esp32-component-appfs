@@ -60,17 +60,25 @@ is implemented as a singleton.
 #include <stdlib.h>
 #include <string.h>
 
+#include "bootloader_common.h"
+#include "esp_attr.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "sdkconfig.h"
-#ifndef BOOTLOADER_BUILD
-#include "soc/rtc_cntl_reg.h"
-#include "esp_partition.h"
+#if !CONFIG_IDF_TARGET_ESP32
+#include "hal/mmu_hal.h"
+#include "hal/cache_hal.h"
+#include "hal/cache_ll.h"
 #endif
-
+#include "sdkconfig.h"
 #include "rom/cache.h"
 #include "rom/crc.h"
 
+#ifndef BOOTLOADER_BUILD
+#include "esp_partition.h"
+#endif
+#if CONFIG_APPFS_USE_RTC_REG
+#include "soc/rtc_cntl_reg.h"
+#endif
 
 
 #if !CONFIG_SPI_FLASH_WRITING_DANGEROUS_REGIONS_ALLOWED
@@ -272,6 +280,34 @@ size_t appfsGetTotalMem() {
 	return ret;
 }
 
+appfs_handle_t appfsBootselGet(bool *valid, char const **arg) {
+#if CONFIG_APPFS_USE_RTC_REG
+	ESP_LOGW(TAG, "App argument not supported with CONFIG_APPFS_USE_RTC_REG=y")
+	return -1;
+#else
+	// Obtain pointer to retained memory.
+	rtc_retain_mem_t *mem     = bootloader_common_get_rtc_retain_mem();
+	appfs_bootsel_t  *bootsel = (appfs_bootsel_t *) &mem->custom;
+	// Detect bootsel presence.
+	if (bootsel->magic != APPFS_BOOTSEL_MAGIC) {
+		return -1;
+	}
+	// Read valid flag.
+	if (valid) {
+		*valid = bootsel->valid;
+	}
+	// Verify that arg is null-terminated.
+	if (strnlen(bootsel->arg, sizeof(bootsel->arg)) > APPFS_MAX_ARG_LENGTH) {
+		ESP_LOGW(TAG, "App argument is not NULL-terminated");
+		*arg = NULL;
+	} else {
+		*arg = bootsel->arg;
+	}
+	return bootsel->fd;
+#endif
+}
+
+
 #ifdef BOOTLOADER_BUILD
 
 /*
@@ -284,7 +320,9 @@ in the loader segment instead of in random IRAM.
 #include "soc/soc.h"
 #include "esp_cpu.h"
 #include "soc/rtc.h"
+#if CONFIG_IDF_TARGET_ESP32
 #include "soc/dport_reg.h"
+#endif
 
 //These can be overridden if we need a custom implementation of bootloader_mmap/munmap.
 IRAM_ATTR __attribute__ ((weak)) const void *appfs_bootloader_mmap(uint32_t src_addr, uint32_t size)  {
@@ -331,9 +369,6 @@ void appfsBlDeinit() {
 	keep_meta_mapped=0;
 }
 
-#define MMU_BLOCK0_VADDR  0x3f400000
-#define MMU_BLOCK50_VADDR 0x3f720000
-
 IRAM_ATTR esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions) {
 	uint8_t pages[255];
 	int page_count=0;
@@ -346,33 +381,59 @@ IRAM_ATTR esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int n
 	if (appfsMeta) appfs_bootloader_munmap(appfsMeta);
 	appfsMeta=NULL;
 	
+#if CONFIG_IDF_TARGET_ESP32
 	Cache_Read_Disable( 0 );
 	Cache_Flush( 0 );
 	for (int i = 0; i < DPORT_FLASH_MMU_TABLE_SIZE; i++) {
 		DPORT_PRO_FLASH_MMU_TABLE[i] = DPORT_FLASH_MMU_TABLE_INVALID_VAL;
 	}
+#else
+    cache_hal_disable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
+	mmu_hal_unmap_all();
+#endif
 	
 	for (int i=0; i<noRegions; i++) {
-		uint32_t p=regions[i].fileAddr/APPFS_SECTOR_SZ;
-		uint32_t d=regions[i].mapAddr&~(APPFS_SECTOR_SZ-1);
-		for (uint32_t a=0; a<regions[i].length; a+=APPFS_SECTOR_SZ) {
-			ESP_LOGI(TAG, "Flash mmap seg %d: %"PRIX32" from %"PRIX32, i, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ));
+		uint32_t p = regions[i].fileAddr / APPFS_SECTOR_SZ;
+		uint32_t vaddr = regions[i].mapAddr & ~(APPFS_SECTOR_SZ-1);
+		for (uint32_t a = 0; a < regions[i].length; a += APPFS_SECTOR_SZ) {
+			uint32_t paddr = appfsPartOffset + ((pages[p]+1)*APPFS_SECTOR_SZ);
+			ESP_LOGI(TAG, "Flash mmap seg %d: %"PRIX32" from %"PRIX32, i, vaddr, paddr);
+#if CONFIG_IDF_TARGET_ESP32
 			for (int cpu=0; cpu<2; cpu++) {
-				int e = cache_flash_mmu_set(cpu, 0, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ), 64, 1);
+				int e = cache_flash_mmu_set(cpu, 0, vaddr, paddr, 64, 1);
 				if (e != 0) {
 					ESP_LOGE(TAG, "cache_flash_mmu_set failed for cpu %d: %d", cpu, e);
 					Cache_Read_Enable(0);
 					return ESP_ERR_NO_MEM;
 				}
 			}
-			d+=APPFS_SECTOR_SZ;
+#else
+			uint32_t actual_sz;
+    		mmu_hal_map_region(0, MMU_TARGET_FLASH0, vaddr, paddr, APPFS_SECTOR_SZ, &actual_sz);
+#endif
+			vaddr+=APPFS_SECTOR_SZ;
 			p++;
-			if (p>page_count) return ESP_ERR_NO_MEM;
+			if (p > page_count) return ESP_ERR_NO_MEM;
 		}
 	}
+#if CONFIG_IDF_TARGET_ESP32
 	DPORT_REG_CLR_BIT( DPORT_PRO_CACHE_CTRL1_REG, (DPORT_PRO_CACHE_MASK_IRAM0) | (DPORT_PRO_CACHE_MASK_IRAM1 & 0) | (DPORT_PRO_CACHE_MASK_IROM0 & 0) | DPORT_PRO_CACHE_MASK_DROM0 | DPORT_PRO_CACHE_MASK_DRAM1 );
 	DPORT_REG_CLR_BIT( DPORT_APP_CACHE_CTRL1_REG, (DPORT_APP_CACHE_MASK_IRAM0) | (DPORT_APP_CACHE_MASK_IRAM1 & 0) | (DPORT_APP_CACHE_MASK_IROM0 & 0) | DPORT_APP_CACHE_MASK_DROM0 | DPORT_APP_CACHE_MASK_DRAM1 );
 	Cache_Read_Enable( 0 );
+#else
+    cache_bus_mask_t bus_mask = cache_ll_l1_get_bus(0, SOC_DROM_LOW, SOC_DROM_HIGH-SOC_DROM_LOW);
+    cache_ll_l1_enable_bus(0, bus_mask);
+    bus_mask = cache_ll_l1_get_bus(0, SOC_IROM_LOW, SOC_IROM_HIGH-SOC_IROM_LOW);
+    cache_ll_l1_enable_bus(0, bus_mask);
+#if !CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
+    bus_mask = cache_ll_l1_get_bus(1, drom_load_addr_aligned, drom_size);
+    cache_ll_l1_enable_bus(1, bus_mask);
+    bus_mask = cache_ll_l1_get_bus(1, irom_load_addr_aligned, irom_size);
+    cache_ll_l1_enable_bus(1, bus_mask);
+#endif
+	
+	cache_hal_enable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
+#endif
 	return ESP_OK;
 }
 
@@ -382,30 +443,49 @@ IRAM_ATTR void* appfsBlMmap(int fd) {
 	//Bootloader_mmap only allows mapping of one consecutive memory range. We need more than that, so we essentially
 	//replicate the function here.
 	
+#if CONFIG_IDF_TARGET_ESP32
 	Cache_Read_Disable(0);
 	Cache_Flush(0);
+#else
+    cache_hal_disable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
+#endif
 	int page=fd;
 	for (int i=0; i<50; i++) {
-//		ESP_LOGI(TAG, "Mapping flash addr %X to mem addr %X for page %d", appfsPartOffset+((pages[i]+1)*APPFS_SECTOR_SZ), MMU_BLOCK0_VADDR+(i*APPFS_SECTOR_SZ), pages[i]);
-		int e = cache_flash_mmu_set(0, 0, MMU_BLOCK0_VADDR+(i*APPFS_SECTOR_SZ), 
-						appfsPartOffset+((page+1)*APPFS_SECTOR_SZ), 64, 1);
+//		ESP_LOGI(TAG, "Mapping flash addr %X to mem addr %X for page %d", appfsPartOffset+((pages[i]+1)*APPFS_SECTOR_SZ), SOC_DROM_LOW+(i*APPFS_SECTOR_SZ), pages[i]);
+		uint32_t vaddr = SOC_DROM_LOW+(i*APPFS_SECTOR_SZ);
+		uint32_t paddr = appfsPartOffset+((page+1)*APPFS_SECTOR_SZ);
+#if CONFIG_IDF_TARGET_ESP32
+		int e = cache_flash_mmu_set(0, 0, vaddr, paddr, 64, 1);
 		if (e != 0) {
 			ESP_LOGE(TAG, "cache_flash_mmu_set failed: %d", e);
 			Cache_Read_Enable(0);
 			return NULL;
 		}
+#else
+		uint32_t actual_sz;
+		mmu_hal_map_region(0, MMU_TARGET_FLASH0, vaddr, paddr, APPFS_SECTOR_SZ, &actual_sz);
+#endif
 		page=next_page_for[page];
 		if (page==0) break;
 	}
-	Cache_Read_Enable(0);
-	return (void *)(MMU_BLOCK0_VADDR);
+#if CONFIG_IDF_TARGET_ESP32
+	Cache_Read_Enable( 0 );
+#else
+	cache_hal_enable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
+#endif
+	return (void *)(SOC_DROM_LOW);
 }
 
 IRAM_ATTR void appfsBlMunmap() {
 	/* Full MMU reset */
+#if CONFIG_IDF_TARGET_ESP32
 	Cache_Read_Disable(0);
 	Cache_Flush(0);
 	mmu_init(0);
+#else
+    cache_hal_disable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
+	mmu_hal_unmap_all();
+#endif
 	if (keep_meta_mapped) {
 		appfsMeta=appfs_bootloader_mmap(appfsPartOffset, APPFS_SECTOR_SZ);
 	}
@@ -474,9 +554,35 @@ esp_err_t appfsInit(int type, int subtype) {
 }
 
 
-bool appfsBootSelect(appfs_handle_t fd) {
+bool appfsBootSelect(appfs_handle_t fd, char const *arg) {
+	// Verify the validity of `fd` before continuing.
 	if (!appfsFdValid(fd)) return false;
+#if CONFIG_APPFS_USE_RTC_REG
+	// Store FD in RTC register.
 	REG_WRITE(RTC_CNTL_STORE0_REG, 0xA5000000 | fd);
+	if (arg || strlen(arg)) {
+		ESP_LOGW(TAG, "App argument not supported with CONFIG_APPFS_USE_RTC_REG=y");
+	}
+#else
+	// Obtain pointer to retained memory.
+	rtc_retain_mem_t *mem     = bootloader_common_get_rtc_retain_mem();
+	appfs_bootsel_t  *bootsel = (appfs_bootsel_t *) &mem->custom;
+	// Store FD in retained memory.
+	bootsel->magic = APPFS_BOOTSEL_MAGIC;
+	bootsel->fd    = fd;
+	bootsel->valid = true;
+	// Check validity of argument.
+	if (arg && strlen(arg) > APPFS_MAX_ARG_LENGTH) {
+		ESP_LOGW(TAG, "App argument is too long (%zu), and discarded", strlen(arg));
+		arg = NULL;
+	}
+	// Store argument.
+	if (arg) {
+		strlcpy(bootsel->arg, arg, sizeof(bootsel->arg));
+	} else {
+		bootsel->arg[0] = 0;
+	}
+#endif
 	return true;
 }
 
