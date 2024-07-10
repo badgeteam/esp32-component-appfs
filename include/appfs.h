@@ -168,16 +168,30 @@ esp_err_t appfsCreateFileExt(const char *filename, const char *title, uint16_t v
  *
  * @param fd File descriptor of the file to map.
  * @param offset Offset into the file where the map starts
- * @param len Lenght of the map
+ * @param len Length of the map
  * @param out_ptr Pointer to a const void* variable where, if successful, a pointer to the memory is stored.
  * @param memory One of SPI_FLASH_MMAP_DATA or SPI_FLASH_MMAP_INST, where the former does a map to data memory
  *               and the latter a map to instruction memory. You'd normally use the first option.
  * @param out_handle Pointer to a spi_flash_mmap_handle_t variable. This variable is needed to later free the
  *                   map again.
- * @return ESP_OK if file successfully deleted, an error otherwise.
+ * @return ESP_OK if file successfully mapped, an error otherwise.
  */
 esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** out_ptr, 
 									spi_flash_mmap_memory_t memory, spi_flash_mmap_handle_t* out_handle);
+
+/**
+ * @brief Map a file into memory
+ *
+ * This maps a (portion of a) file into memory, where you can access it as if it was an array of bytes in RAM.
+ * This uses the MMU and flash cache of the ESP32 to accomplish this effect. The memory is read-only; trying
+ * to write to it will cause an exception.
+ *
+ * @param fd File descriptor of the file to map.
+ * @param offset Offset into the file where the map starts
+ * @param len Length of the map
+ * @return ESP_OK if file successfully mapped, an error otherwise.
+ */
+esp_err_t appfsMmapAt(appfs_handle_t fd, size_t offset, size_t len, size_t mmu_vaddr, spi_flash_mmap_memory_t memory);
 
 /**
  * @brief Unmap a previously mmap'ped file

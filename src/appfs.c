@@ -66,12 +66,14 @@ is implemented as a singleton.
 #include "esp_log.h"
 #if !CONFIG_IDF_TARGET_ESP32
 #include "hal/mmu_hal.h"
+#include "hal/mmu_ll.h"
 #include "hal/cache_hal.h"
 #include "hal/cache_ll.h"
 #endif
 #include "sdkconfig.h"
 #include "rom/cache.h"
 #include "rom/crc.h"
+#include <esp_private/cache_utils.h>
 
 #ifndef BOOTLOADER_BUILD
 #include "esp_partition.h"
@@ -838,6 +840,62 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 
 void appfsMunmap(spi_flash_mmap_handle_t handle) {
 	spi_flash_munmap(handle);
+}
+
+IRAM_ATTR esp_err_t appfsMmapAt(appfs_handle_t fd, size_t offset, size_t len, size_t mmu_vaddr, spi_flash_mmap_memory_t memory) {
+	if (!appfsFdValid(fd)) return ESP_ERR_NOT_FOUND;
+	
+	// Address checks.
+#if SOC_DROM_LOW != SOC_IROM_LOW
+	if (memory == SPI_FLASH_MMAP_DATA) {
+#endif
+		if (mmu_vaddr < SOC_DROM_LOW || mmu_vaddr + len >= SOC_DROM_HIGH) {
+			ESP_LOGD(TAG, "Can't map file: vaddr out of range");
+			return ESP_ERR_INVALID_ARG;
+		}
+		mmu_vaddr -= SOC_DROM_LOW;
+#if SOC_DROM_LOW != SOC_IROM_LOW
+	} else {
+		if (mmu_vaddr < SOC_IROM_LOW || mmu_vaddr + len >= SOC_IROM_HIGH) {
+			return ESP_ERR_INVALID_ARG;
+		}
+		mmu_vaddr -= SOC_IROM_LOW;
+	}
+#endif
+	
+	if (mmu_vaddr % CONFIG_MMU_PAGE_SIZE != offset % CONFIG_MMU_PAGE_SIZE) {
+		ESP_LOGD(TAG, "Can't map file: vaddr misaligned");
+		return ESP_ERR_INVALID_ARG;
+	}
+	
+	if (offset + len > appfsMeta[appfsActiveMeta].page[fd].size) {
+		ESP_LOGD(TAG, "Can't map file: trying to map byte %zu in file of len %"PRId32, (offset+len), appfsMeta[appfsActiveMeta].page[fd].size);
+		return ESP_ERR_INVALID_SIZE;
+	}
+	
+	// Convert into page numbers.
+	if (mmu_vaddr % CONFIG_MMU_PAGE_SIZE) {
+		len       += mmu_vaddr % CONFIG_MMU_PAGE_SIZE;
+		mmu_vaddr -= mmu_vaddr % CONFIG_MMU_PAGE_SIZE;
+	}
+	len        = (len - 1) / CONFIG_MMU_PAGE_SIZE + 1;
+	mmu_vaddr /= CONFIG_MMU_PAGE_SIZE;
+	
+	
+	spi_flash_disable_interrupts_caches_and_other_cpu();
+	
+	// All checks passed, map the pages.
+	uint8_t appfs_page = fd;
+	for (size_t i = 0; i < len; i++) {
+		size_t   ppn   = appfs_page + appfsPart->address / CONFIG_MMU_PAGE_SIZE + 1;
+		uint32_t entry = mmu_ll_format_paddr(MMU_LL_FLASH_MMU_ID, ppn * CONFIG_MMU_PAGE_SIZE, MMU_TARGET_FLASH0);
+		mmu_ll_write_entry(MMU_LL_FLASH_MMU_ID, mmu_vaddr + i, entry, MMU_TARGET_FLASH0);
+		appfs_page = appfsMeta[appfsActiveMeta].page[appfs_page].next;
+	}
+	
+	spi_flash_enable_interrupts_caches_and_other_cpu();
+	
+	return ESP_OK;
 }
 
 //Just mmaps and memcpys the data. Maybe not the fastest ever, but hey, if you want that you should mmap 
