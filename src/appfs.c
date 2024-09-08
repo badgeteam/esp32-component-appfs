@@ -551,6 +551,10 @@ esp_err_t appfsInit(int type, int subtype) {
 		ESP_LOGE(TAG, "No valid meta info found. Re-initializing fs.");
 		r=appfsFormat();
 	}
+	#ifndef BOOTLOADER_BUILD
+	void appfsVfsMount();
+	appfsVfsMount();
+	#endif
 	ESP_LOGD(TAG, "Initialized.");
 	return r;
 }
