@@ -973,6 +973,84 @@ esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len) 
 	return ESP_OK;
 }
 
+esp_err_t appfsShrink(appfs_handle_t fd, uint8_t *nextForPage, size_t old_pages, size_t new_pages) {}
+
+esp_err_t appfsGrow(appfs_handle_t fd, uint8_t *nextForPage, size_t old_pages, size_t new_pages) {
+	// Get last page in file.
+	int cur_page = fd;
+	while (appfsMeta[appfsActiveMeta].page[cur_page].next != 0) {
+		cur_page = appfsMeta[appfsActiveMeta].page[cur_page].next;
+	}
+	
+	// Add more pages to the file.
+	size_t extra = new_pages - old_pages;
+	for (uint8_t i = 0; extra && i < APPFS_PAGES; i++) {
+		if (appfsMeta[appfsActiveMeta].page[i].used == APPFS_USE_FREE) {
+			nextForPage[cur_page] = i;
+			nextForPage[i]        = 0;
+			cur_page              = i;
+			extra --;
+		}
+	}
+	
+	return extra ? ESP_ERR_NO_MEM : ESP_OK;
+}
+
+esp_err_t appfsResize(appfs_handle_t fd, size_t new_size) {
+	esp_err_t r;
+	size_t old_size  = appfsMeta[appfsActiveMeta].page[fd].size;
+	if (old_size == new_size) {
+		return ESP_OK;
+	}
+	
+	// Count how many pages are needed.
+	size_t old_pages = (old_size - 1) / APPFS_SECTOR_SZ + 1;
+	size_t new_pages = (new_size - 1) / APPFS_SECTOR_SZ + 1;
+	
+	uint8_t nextForPage[APPFS_PAGES];
+	for (int i = 0; i < APPFS_PAGES; i++) nextForPage[i] = APPFS_PAGES;
+	
+	if (old_pages < new_pages) {
+		// Allocate more pages.
+		return appfsGrow(fd, nextForPage, old_pages, new_pages);
+	} else if (old_pages > new_pages) {
+		// Free pages.
+		return appfsShrink(fd, nextForPage, old_pages, new_pages);
+	}
+	
+	// Re-write a new meta page.
+	int newMeta=(appfsActiveMeta+1)%APPFS_META_CNT;
+	ESP_LOGD(TAG, "Re-writing meta data to meta page %d...", newMeta);
+	r=esp_partition_erase_range(appfsPart, newMeta*APPFS_META_SZ, APPFS_META_SZ);
+	if (r!=ESP_OK) return r;
+	// Prepare header.
+	AppfsHeader hdr;
+	memcpy(&hdr, &appfsMeta[appfsActiveMeta].hdr, sizeof(hdr));
+	hdr.serial++;
+	hdr.crc32=0;
+	// Update page infos.
+	for (int i = 0; i < APPFS_PAGES; i++) {
+		AppfsPageInfo pi;
+		if (nextForPage[i] == APPFS_PAGES) {
+			// Page unchanged.
+			memcpy(&pi, &appfsMeta[appfsActiveMeta].page[i], sizeof(pi));
+		} else if (old_pages < new_pages) {
+			// New page allocated.
+		} else {
+			// Page released.
+		}
+		if (pi.used != APPFS_USE_FREE) {
+			r=writePageInfo(newMeta, i, &pi);
+		}
+		if (r!=ESP_OK) return r;
+	}
+	
+	//Write header and make active.
+	r=writeHdr(&hdr, newMeta);
+	appfsActiveMeta=newMeta;
+	return r;
+}
+
 void appfsDump() {
 	printf("AppFsDump: ..=free XX=illegal ##=next page\n");
 	for (int i=0; i<15; i++) printf("%02X-", i);

@@ -64,7 +64,7 @@ static int appfsVfsOpen(char const *path, int flags, int mode) {
         return -1;
     }
     int appfs_fd = appfsOpen(path + 1);
-    if (appfs_fd = APPFS_INVALID_FD) {
+    if (appfs_fd == APPFS_INVALID_FD) {
         errno = EACCES;
         return -1;
     }
