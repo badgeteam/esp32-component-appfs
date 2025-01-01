@@ -1,16 +1,15 @@
 /*
  * ----------------------------------------------------------------------------
  * "THE BEER-WARE LICENSE" (Revision 42):
- * Jeroen Domburg <jeroen@spritesmods.com> wrote this file. As long as you retain 
- * this notice you can do whatever you want with this stuff. If we meet some day, 
- * and you think this stuff is worth it, you can buy me a beer in return. 
+ * Jeroen Domburg <jeroen@spritesmods.com> wrote this file. As long as you retain
+ * this notice you can do whatever you want with this stuff. If we meet some day,
+ * and you think this stuff is worth it, you can buy me a beer in return.
  * ----------------------------------------------------------------------------
-*/
+ */
 
 #pragma once
 
 #include <stdint.h>
-
 #include "esp_err.h"
 #include "esp_idf_version.h"
 #if ESP_IDF_VERSION_MAJOR > 4
@@ -19,31 +18,29 @@
 #include "esp_spi_flash.h"
 #endif
 
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define APPFS_PART_TYPE 0x43		/*<! Default partition type of an appfs partition */
-#define APPFS_PART_SUBTYPE 0x3		/*<! Default partition subtype of an appfs partition */
+#define APPFS_PART_TYPE    0x43 /*<! Default partition type of an appfs partition */
+#define APPFS_PART_SUBTYPE 0x3  /*<! Default partition subtype of an appfs partition */
 
 typedef int appfs_handle_t;
 
-#define APPFS_INVALID_FD -1			/*<! Some functions return this to indicate an error situation */
+#define APPFS_INVALID_FD -1 /*<! Some functions return this to indicate an error situation */
 
 #define APPFS_MAX_ARG_LENGTH 127
-#define APPFS_BOOTSEL_MAGIC 0x2af7de4a994f7236
+#define APPFS_BOOTSEL_MAGIC  0x2af7de4a994f7236
 typedef struct {
-	// Identifies AppFS boot select structure.
-	uint64_t       magic;
-	// App to boot.
-	appfs_handle_t fd;
-	// Whether this app is still allowed to boot.
-	// If false but magic is valid, it is assumed the app crashed.
-	bool           valid;
-	// Arbitrary data to send to the app.
-	char           arg[APPFS_MAX_ARG_LENGTH+1];
+    // Identifies AppFS boot select structure.
+    uint64_t magic;
+    // App to boot.
+    appfs_handle_t fd;
+    // Whether this app is still allowed to boot.
+    // If false but magic is valid, it is assumed the app crashed.
+    bool valid;
+    // Arbitrary data to send to the app.
+    char arg[APPFS_MAX_ARG_LENGTH + 1];
 } appfs_bootsel_t;
 
 /**
@@ -69,22 +66,22 @@ esp_err_t appfsFormat();
 /**
  * @brief Select the file to boot upon next restart.
  * If the argument is too long (`APPFS_MAX_ARG_LENGTH`), it is discarded entirely.
- * 
+ *
  * @param fd File descriptor to boot
  * @param arg Arbitrary data to send to app
  * @returns True if the file is valid and successfully selected to boot
  */
-bool appfsBootSelect(appfs_handle_t fd, char const *arg);
+bool appfsBootSelect(appfs_handle_t fd, char const* arg);
 
 /**
  * @brief Read data from boot select.
  * Does not initialize outputs if boot select is not found.
- * 
+ *
  * @param valid Optional pointer to valid flag
  * @param arg Optional pointer to argument pointer
  * @returns File descriptor if boot select was found, -1 if not
  */
-appfs_handle_t appfsBootselGet(bool *valid, char const **arg);
+appfs_handle_t appfsBootselGet(bool* valid, char const** arg);
 
 /**
  * @brief Check if a file with the given filename exists.
@@ -92,7 +89,7 @@ appfs_handle_t appfsBootselGet(bool *valid, char const **arg);
  * @param filename Filename to check
  * @return 1 if a file with a name which exactly matches filename exists; 0 otherwise.
  */
-int appfsExists(const char *filename);
+int appfsExists(const char* filename);
 
 /**
  * @brief Check if a file descriptor is valid
@@ -111,7 +108,7 @@ bool appfsFdValid(int fd);
  *
  * @param filename Filename of the file to open
  * @return The filedescriptor if succesful, APPFS_INVALID_FD if not. */
-appfs_handle_t appfsOpen(const char *filename);
+appfs_handle_t appfsOpen(const char* filename);
 
 /**
  * @brief Close a file on a mounted appfs
@@ -127,7 +124,7 @@ void appfsClose(appfs_handle_t handle);
  * @param filename Name of the file to delete
  * @return ESP_OK if file successfully deleted, an error otherwise.
  */
-esp_err_t appfsDeleteFile(const char *filename);
+esp_err_t appfsDeleteFile(const char* filename);
 
 /**
  * @brief Create a new file on the appfs
@@ -141,7 +138,7 @@ esp_err_t appfsDeleteFile(const char *filename);
  * @param handle Pointer to an appfs_handle_t which will store the file descriptor of the created file
  * @return ESP_OK if file successfully deleted, an error otherwise.
  */
-esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *handle);
+esp_err_t appfsCreateFile(const char* filename, size_t size, appfs_handle_t* handle);
 
 /**
  * @brief Create a new file on the appfs (extended)
@@ -157,7 +154,8 @@ esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *han
  * @param handle Pointer to an appfs_handle_t which will store the file descriptor of the created file
  * @return ESP_OK if file successfully deleted, an error otherwise.
  */
-esp_err_t appfsCreateFileExt(const char *filename, const char *title, uint16_t version, size_t size, appfs_handle_t *handle);
+esp_err_t appfsCreateFileExt(const char* filename, const char* title, uint16_t version, size_t size,
+                             appfs_handle_t* handle);
 
 /**
  * @brief Map a file into memory
@@ -176,8 +174,8 @@ esp_err_t appfsCreateFileExt(const char *filename, const char *title, uint16_t v
  *                   map again.
  * @return ESP_OK if file successfully mapped, an error otherwise.
  */
-esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** out_ptr, 
-									spi_flash_mmap_memory_t memory, spi_flash_mmap_handle_t* out_handle);
+esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** out_ptr, spi_flash_mmap_memory_t memory,
+                    spi_flash_mmap_handle_t* out_handle);
 
 /**
  * @brief Map a file into memory
@@ -206,7 +204,7 @@ void appfsMunmap(spi_flash_mmap_handle_t handle);
  * @brief Erase a portion of an appfs file
  *
  * This sets all bits in the region to be erased to 1, so an appfsWrite can reset selected bits to 0 again.
- * 
+ *
  * @param fd File descriptor of file to erase in.
  * @param start Start offset of file portion to be erased. Must be aligned to 4KiB.
  * @param len Length of file portion to be erased. Must be a multiple of 4KiB.
@@ -230,11 +228,11 @@ esp_err_t appfsErase(appfs_handle_t fd, size_t start, size_t len);
  * @param len Length, in bytes, of data to be written
  * @return ESP_OK if write was successful, an error otherwise.
  */
-esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len);
+esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t* buf, size_t len);
 
 /**
  * @brief Read a portion of a file in appfs
- * 
+ *
  * This function reads ``len`` bytes of file data, starting from offset ``start``, into the buffer
  * ``buf``. Note that if you do many reads, it usually is more efficient to map the file into memory and
  * read from it that way instead.
@@ -245,34 +243,35 @@ esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len);
  * @param len Length, in bytes, of the data to read
  * @return ESP_OK if read was successful, an error otherwise.
  */
-esp_err_t appfsRead(appfs_handle_t fd, size_t start, void *buf, size_t len);
+esp_err_t appfsRead(appfs_handle_t fd, size_t start, void* buf, size_t len);
 
 /**
  * @brief Atomically rename a file
- * 
+ *
  * This atomically renames a file. If a file with the target name already exists, it will be deleted. This action
- * is done atomically, so at any point in time, either the original or the new file will fully exist under the target name.
+ * is done atomically, so at any point in time, either the original or the new file will fully exist under the target
+ * name.
  *
  * @param from Original name of file
  * @param to Target name of file
  * @return ESP_OK if rename was successful, an error otherwise.
  */
-esp_err_t appfsRename(const char *from, const char *to);
+esp_err_t appfsRename(const char* from, const char* to);
 
 /**
  * @brief Get file information
  *
  * Given a file descriptor, this returns the name and size of the file. The file descriptor needs
  * to be valid for this to work.
- * 
+ *
  * @param fd File descriptor
  * @param name Pointer to a char pointer. This will be pointed at the filename in memory. There is no need
- *             to free the pointer memory afterwards. Pointer memory is valid while the file exists / is not 
+ *             to free the pointer memory afterwards. Pointer memory is valid while the file exists / is not
  *             deleted. Can be NULL if name information is not wanted.
  * @param size Pointer to an int where the size of the file will be written, or NULL if this information is
  *             not wanted.
  */
-void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size);
+void appfsEntryInfo(appfs_handle_t fd, const char** name, int* size);
 
 /**
  * @brief Get file information (extended)
@@ -292,7 +291,7 @@ void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size);
  * @param size Pointer to an int where the size of the file will be written, or NULL if this information is
  *             not wanted.
  */
-void appfsEntryInfoExt(appfs_handle_t fd, const char **name, const char **title, uint16_t* version, int *size);
+void appfsEntryInfoExt(appfs_handle_t fd, const char** name, const char** title, uint16_t* version, int* size);
 
 /**
  * brief Get the next entry in the appfs.
@@ -313,7 +312,7 @@ appfs_handle_t appfsNextEntry(appfs_handle_t fd);
  * @param ret_app Pointer to variable to hold the file descriptor
  * @return ESP_OK on success, an error when e.g. the currently running code isn't located in appfs.
  */
-esp_err_t appfsGetCurrentApp(appfs_handle_t *ret_app);
+esp_err_t appfsGetCurrentApp(appfs_handle_t* ret_app);
 
 /**
  * @brief Get amount of free space in appfs partition
@@ -336,17 +335,16 @@ size_t appfsGetTotalMem();
  */
 void appfsDump();
 
-
 #ifdef BOOTLOADER_BUILD
 #include "bootloader_flash_priv.h"
 
 /**
-  * @brief Appfs bootloader support: struct to hold a region of a file to map
+ * @brief Appfs bootloader support: struct to hold a region of a file to map
  */
 typedef struct {
-	uint32_t fileAddr;		/*<! Offset in file */
-	uint32_t mapAddr;		/*<! Address to map to */
-	uint32_t length;		/*<! Length of region */
+    uint32_t fileAddr; /*<! Offset in file */
+    uint32_t mapAddr;  /*<! Address to map to */
+    uint32_t length;   /*<! Length of region */
 } AppfsBlRegionToMap;
 
 /**
@@ -379,7 +377,6 @@ void* appfsBlMmap(int fd);
  */
 void appfsBlMunmap();
 
-
 /**
  * @brief Bootloader only: read data from a file
  *
@@ -389,7 +386,7 @@ void appfsBlMunmap();
  * @param size Length to read
  * @return ESP_OK if OK
  */
-esp_err_t appfs_bootloader_read(int fd, size_t src_addr, void *dest, size_t size);
+esp_err_t appfs_bootloader_read(int fd, size_t src_addr, void* dest, size_t size);
 
 /*
  * @brief Bootloader only: map multiple regions within a file to various memory addressed.
@@ -401,7 +398,7 @@ esp_err_t appfs_bootloader_read(int fd, size_t src_addr, void *dest, size_t size
  * @param noRegions Amount of regions to map
  * @return ESP_OK on success, an error when the map failed.
  */
-esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions);
+esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap* regions, int noRegions);
 
 #endif
 
