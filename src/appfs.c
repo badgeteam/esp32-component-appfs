@@ -849,6 +849,7 @@ void appfsMunmap(spi_flash_mmap_handle_t handle) {
 
 IRAM_ATTR esp_err_t appfsMmapAt(appfs_handle_t fd, size_t offset, size_t len, size_t mmu_vaddr,
                                 spi_flash_mmap_memory_t memory) {
+#if CONFIG_IDF_TARGET_ESP32P4 || CONFIG_IDF_TARGET_ESP32C6
     if (!appfsFdValid(fd)) return ESP_ERR_NOT_FOUND;
 
         // Address checks.
@@ -902,6 +903,9 @@ IRAM_ATTR esp_err_t appfsMmapAt(appfs_handle_t fd, size_t offset, size_t len, si
     spi_flash_enable_interrupts_caches_and_other_cpu();
 
     return ESP_OK;
+#else
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 // Just mmaps and memcpys the data. Maybe not the fastest ever, but hey, if you want that you should mmap
