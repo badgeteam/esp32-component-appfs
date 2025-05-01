@@ -85,6 +85,10 @@ is implemented as a singleton.
     "Appfs will not work with SPI flash dangerous regions checking. Please use 'make menuconfig' to enable writing to dangerous regions."
 #endif
 
+#ifndef MMU_LL_FLASH_MMU_ID
+#define MMU_LL_FLASH_MMU_ID 0
+#endif
+
 static char const* TAG = "appfs";
 
 #define APPFS_SECTOR_SZ    SPI_FLASH_MMU_PAGE_SIZE
@@ -852,7 +856,7 @@ IRAM_ATTR esp_err_t appfsMmapAt(appfs_handle_t fd, size_t offset, size_t len, si
 #if CONFIG_IDF_TARGET_ESP32P4 || CONFIG_IDF_TARGET_ESP32C6
     if (!appfsFdValid(fd)) return ESP_ERR_NOT_FOUND;
 
-        // Address checks.
+    // Address checks.
 #if SOC_DROM_LOW != SOC_IROM_LOW
     if (memory == SPI_FLASH_MMAP_DATA) {
 #endif
