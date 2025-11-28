@@ -573,7 +573,7 @@ bool appfsBootSelect(appfs_handle_t fd, char const* arg) {
 #if CONFIG_APPFS_USE_RTC_REG
     // Store FD in RTC register.
     REG_WRITE(RTC_CNTL_STORE0_REG, 0xA5000000 | fd);
-    if (arg || strlen(arg)) {
+    if (arg && strlen(arg) > 0) {
         ESP_LOGW(TAG, "App argument not supported with CONFIG_APPFS_USE_RTC_REG=y");
     }
 #else
