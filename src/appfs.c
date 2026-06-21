@@ -95,7 +95,7 @@ static char const* TAG = "appfs";
 #define APPFS_META_SZ      (APPFS_SECTOR_SZ / 2)
 #define APPFS_META_CNT     2
 #define APPFS_META_DESC_SZ 128
-#define APPFS_PAGES        255
+#define APPFS_PAGES        ((APPFS_META_SZ / APPFS_META_DESC_SZ) - 1)
 #define APPFS_MAGIC        "AppFsDsc"
 
 #define APPFS_USE_FREE 0xff  // No file allocated here
