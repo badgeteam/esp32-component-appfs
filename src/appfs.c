@@ -462,6 +462,7 @@ IRAM_ATTR void* appfsBlMmap(int fd) {
     cache_hal_disable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
 #endif
     int page = fd;
+    int num_pages = 0;
     for (int i = 0; i < 50; i++) {
         //		ESP_LOGI(TAG, "Mapping flash addr %X to mem addr %X for page %d",
         // appfsPartOffset+((pages[i]+1)*APPFS_SECTOR_SZ), SOC_DROM_LOW+(i*APPFS_SECTOR_SZ), pages[i]);
@@ -477,6 +478,7 @@ IRAM_ATTR void* appfsBlMmap(int fd) {
 #else
         uint32_t actual_sz;
         mmu_hal_map_region(0, MMU_TARGET_FLASH0, vaddr, paddr, APPFS_SECTOR_SZ, &actual_sz);
+        num_pages++;
 #endif
         page = next_page_for[page];
         if (page == 0) break;
@@ -484,6 +486,9 @@ IRAM_ATTR void* appfsBlMmap(int fd) {
 #if CONFIG_IDF_TARGET_ESP32
     Cache_Read_Enable(0);
 #else
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+    cache_ll_invalidate_addr(CACHE_LL_LEVEL_ALL, CACHE_TYPE_ALL, CACHE_LL_ID_ALL, SOC_DROM_LOW, num_pages * APPFS_SECTOR_SZ);
+#endif
     cache_hal_enable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
 #endif
     return (void*)(SOC_DROM_LOW);
