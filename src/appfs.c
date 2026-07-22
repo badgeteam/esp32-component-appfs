@@ -440,7 +440,7 @@ IRAM_ATTR esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap* regions, int n
 #if !CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
     bus_mask = cache_ll_l1_get_bus(1, SOC_DROM_LOW, SOC_DROM_HIGH - SOC_DROM_LOW);
     cache_ll_l1_enable_bus(1, bus_mask);
-    bus_mask = cache_ll_l1_get_bus(1, SOC_IROM_HIGH - SOC_IROM_LOW, SOC_IROM_HIGH - SOC_IROM_LOW);
+    bus_mask = cache_ll_l1_get_bus(1, SOC_IROM_LOW, SOC_IROM_HIGH - SOC_IROM_LOW);
     cache_ll_l1_enable_bus(1, bus_mask);
 #endif
 
@@ -487,7 +487,8 @@ IRAM_ATTR void* appfsBlMmap(int fd) {
     Cache_Read_Enable(0);
 #else
 #if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-    cache_ll_invalidate_addr(CACHE_LL_LEVEL_ALL, CACHE_TYPE_ALL, CACHE_LL_ID_ALL, SOC_DROM_LOW, num_pages * APPFS_SECTOR_SZ);
+    cache_ll_invalidate_addr(CACHE_LL_LEVEL_ALL, CACHE_TYPE_ALL, CACHE_LL_ID_ALL, SOC_DROM_LOW,
+                             num_pages * APPFS_SECTOR_SZ);
 #endif
     cache_hal_enable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
 #endif
