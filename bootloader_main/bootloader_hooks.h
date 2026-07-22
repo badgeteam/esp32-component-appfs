@@ -22,7 +22,6 @@
  * Please check `custom_bootloader` ESP-IDF examples for more details about this feature.
  */
 
-
 /**
  * @brief Function executed *before* the second stage bootloader initialization,
  * if provided.
@@ -35,4 +34,4 @@ void __attribute__((weak)) bootloader_before_init(void);
  */
 void __attribute__((weak)) bootloader_after_init(void);
 
-#endif // BOOTLOADER_HOOKS_H
+#endif  // BOOTLOADER_HOOKS_H
