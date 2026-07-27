@@ -418,6 +418,9 @@ IRAM_ATTR esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap* regions, int n
 #else
             uint32_t actual_sz;
             mmu_hal_map_region(0, MMU_TARGET_FLASH0, vaddr, paddr, APPFS_SECTOR_SZ, &actual_sz);
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
+            cache_ll_invalidate_addr(CACHE_LL_LEVEL_ALL, CACHE_TYPE_ALL, CACHE_LL_ID_ALL, vaddr, actual_sz);
+#endif
 #endif
             vaddr += APPFS_SECTOR_SZ;
             p++;
