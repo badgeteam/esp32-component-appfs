@@ -1,0 +1,25 @@
+AppFS ESP-IDF component
+
+The modified bootloader source was originally authored by Espressif and released under terms of the Apache 2.0 license.
+
+The AppFS source was originally authored by Jeroen Domburg and released under terms of the Beerware license, which by its own text allows relicensing as Apache 2.0 provided the original notice is preserved.
+
+The modifications done by Nicolai Electronics and Stichting Badge.Team are released under terms of the Apache 2.0 license.
+
+The license for this component (Apache 2.0) is included in the file "LICENSE".
+
+-----
+
+Copyright (c) 2026 Nicolai Electronics
+Copyright (c) 2026 Stichting Badge.Team
+Copyright (c) 2018 Jeroen Domburg
+Copyright (c) 2026 Espressif Systems (Shanghai) CO LTD.
+
+-----
+
+Beerware notice as included in the AppFS source code files:
+
+"THE BEER-WARE LICENSE" (Revision 42):
+Jeroen Domburg jeroen@spritesmods.com wrote this file.
+As long as you retain this notice you can do whatever you want with this stuff.
+If we meet some day, and you think this stuff is worth it, you can buy me a beer in return.

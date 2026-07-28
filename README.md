@@ -10,13 +10,27 @@ In your project directory execute the following commands:
  - ln -s ../components/appfs appfs
  - ln -s ../components/appfs/bootloader_main main
 
+## Compatibility
+
+Fully supported Xtensa chips:
+
+- esp32
+- esp32s3
+
+Fully supported RISC-V chips:
+
+- esp32c6
+- esp32p4
+- esp32c5
+- esp32c3
+- esp32h2
+
+Partially supported RISC-V chips:
+
+- esp32c61
+
+The ESP32-C61 does not have RTC/LP RAM and thus passing an argument string to an application is not supported on this chip.
+
 ## License
-The AppFS component (appfs.c / appfs.h) is licensed as follows:
 
-"THE BEER-WARE LICENSE" (Revision 42):
-Jeroen Domburg <jeroen@spritesmods.com> wrote this file. As long as you retain 
-this notice you can do whatever you want with this stuff. If we meet some day, 
-and you think this stuff is worth it, you can buy me a beer in return. 
-
-The bootloader overrides are licensed under Apache-2.0 license by 2015-2021 Espressif Systems (Shanghai) CO LTD.
-
+For the full Apache 2.0 license text see [LICENSE](LICENSE). For licensing notices see [NOTICE](NOTICE).

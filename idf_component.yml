@@ -2,7 +2,7 @@ dependencies:
   cmake_utilities: 0.*
   idf: ">=6.0.2"
 description: AppFS
-license: Beerware
+license: Apache-2.0
 repository: git@github.com:badgeteam/esp32-component-appfs.git
 issues: https://github.com/badgeteam/esp32-component-appfs/issues
 url: https://github.com/badgeteam/esp32-component-appfs
