@@ -15,3 +15,5 @@ targets:
   - esp32c3
   - esp32c61
   - esp32h2
+  - esp32s31
+  - esp32c2

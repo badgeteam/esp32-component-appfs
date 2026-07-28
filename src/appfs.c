@@ -70,14 +70,14 @@ is implemented as a singleton.
 #endif
 #include <esp_private/cache_utils.h>
 #include "rom/cache.h"
-#include "rom/crc.h"
+#include "esp_rom_crc.h"
 #include "sdkconfig.h"
 
 #ifndef BOOTLOADER_BUILD
 #include "esp_partition.h"
 #endif
 #if CONFIG_APPFS_USE_RTC_REG
-#if CONFIG_IDF_TARGET_ESP32
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32C2
 #include "soc/rtc_cntl_reg.h"
 #define APPFS_RTC_REG RTC_CNTL_STORE0_REG
 #elif CONFIG_IDF_TARGET_ESP32C61
@@ -164,9 +164,9 @@ static esp_err_t findActiveMeta() {
             uint32_t expectedCrc = hdr.crc32;
             hdr.crc32 = 0;
             uint32_t crc = 0;
-            crc = crc32_le(crc, (uint8_t const*)&hdr, APPFS_META_DESC_SZ);
+            crc = esp_rom_crc32_le(crc, (uint8_t const*)&hdr, APPFS_META_DESC_SZ);
             for (int j = 0; j < APPFS_PAGES; j++) {
-                crc = crc32_le(crc, (uint8_t const*)&appfsMeta[sec].page[j], APPFS_META_DESC_SZ);
+                crc = esp_rom_crc32_le(crc, (uint8_t const*)&appfsMeta[sec].page[j], APPFS_META_DESC_SZ);
             }
             if (crc == expectedCrc) {
                 validSec |= (1 << sec);
@@ -567,9 +567,9 @@ IRAM_ATTR esp_err_t appfs_bootloader_read(int fd, size_t src_addr, void* dest, s
 static esp_err_t writeHdr(AppfsHeader* hdr, int metaNo) {
     hdr->crc32 = 0;
     uint32_t crc = 0;
-    crc = crc32_le(crc, (uint8_t const*)hdr, APPFS_META_DESC_SZ);
+    crc = esp_rom_crc32_le(crc, (uint8_t const*)hdr, APPFS_META_DESC_SZ);
     for (int j = 0; j < APPFS_PAGES; j++) {
-        crc = crc32_le(crc, (uint8_t const*)&appfsMeta[metaNo].page[j], APPFS_META_DESC_SZ);
+        crc = esp_rom_crc32_le(crc, (uint8_t const*)&appfsMeta[metaNo].page[j], APPFS_META_DESC_SZ);
     }
     hdr->crc32 = crc;
     return esp_partition_write(appfsPart, metaNo * APPFS_META_SZ, hdr, sizeof(AppfsHeader));
