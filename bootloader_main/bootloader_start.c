@@ -18,7 +18,13 @@
 #include "sdkconfig.h"
 
 #if CONFIG_APPFS_USE_RTC_REG
+#if CONFIG_IDF_TARGET_ESP32
 #include "soc/rtc_cntl_reg.h"
+#define APPFS_RTC_REG RTC_CNTL_STORE0_REG
+#elif CONFIG_IDF_TARGET_ESP32C61
+#include "soc/lp_aon_reg.h"
+#define APPFS_RTC_REG LP_AON_STORE0_REG
+#endif
 #endif
 
 static char const TAG[] = "bootloader";
@@ -155,7 +161,7 @@ static int selected_boot_partition(const bootloader_state_t* bs) {
 static int appfs_get_new_app() {
 #if CONFIG_APPFS_USE_RTC_REG
     // Use RTC reg as FD storage.
-    uint32_t r = REG_READ(RTC_CNTL_STORE0_REG);
+    uint32_t r = REG_READ(APPFS_RTC_REG);
     ESP_LOGI(TAG, "RTC store0 reg: %x", r);
     if ((r & 0xFF000000) != 0xA5000000) return -1;
     return r & 0xff;
@@ -226,7 +232,7 @@ static void appfs_try_boot(bootloader_state_t* bs) {
                 // And bingo bango, we can now boot from appfs as if it is the first ota partition.
 #if CONFIG_APPFS_USE_RTC_REG
                 // Store magic to prevent bootloader from starting app again while keeping app fd in memory
-                REG_WRITE(RTC_CNTL_STORE0_REG, 0xA6000000 | handle);
+                REG_WRITE(APPFS_RTC_REG, 0xA6000000 | handle);
 #else
                 // Mark bootsel as invalid to prevent repeated start.
                 rtc_retain_mem_t* mem = bootloader_common_get_rtc_retain_mem();

@@ -1,6 +1,13 @@
 menu "AppFS"
     config APPFS_USE_RTC_REG
-        depends on (IDF_TARGET = "esp32")
-        bool "Use RTC_CNTL_STORE0_REG instead of LP RAM"
+        depends on (IDF_TARGET = "esp32" || IDF_TARGET = "esp32c61")
+        bool "Use a single retained register instead of LP RAM"
         default y
+        help
+            Stores the selected AppFS handle in a single retained register
+            (RTC_CNTL_STORE0_REG on ESP32, LP_AON_STORE0_REG on ESP32-C61)
+            instead of the RTC/LP retained memory block used on other
+            targets. Required on targets without RTC FAST memory support
+            (SOC_RTC_FAST_MEM_SUPPORTED); does not support passing an
+            argument string to the selected app.
 endmenu

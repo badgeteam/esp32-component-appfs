@@ -127,6 +127,13 @@ static IRAM_ATTR void mmap_and_start_app() {
             int page = entry & SOC_MMU_VALID_VAL_MASK;
             int addr = page * SOC_MMU_PAGE_SIZE;
 #endif
+            // Page 0 (flash address 0, where the bootloader itself lives) is not a page the app
+            // loader would ever legitimately map from the appfs partition. On some targets a stray
+            // MMU entry reads back as valid with page 0 even though nothing meaningful was mapped
+            // there; skip it rather than treating it as proof the appfs app failed to load.
+            if (page == 0) {
+                continue;
+            }
             if (addr < ovl_start || addr > ovl_start + ovl_size) {
                 ESP_LOGI(TAG, "Not booting appfs app; not adjusting mmu.");
                 return;

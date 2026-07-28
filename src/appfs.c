@@ -77,7 +77,13 @@ is implemented as a singleton.
 #include "esp_partition.h"
 #endif
 #if CONFIG_APPFS_USE_RTC_REG
+#if CONFIG_IDF_TARGET_ESP32
 #include "soc/rtc_cntl_reg.h"
+#define APPFS_RTC_REG RTC_CNTL_STORE0_REG
+#elif CONFIG_IDF_TARGET_ESP32C61
+#include "soc/lp_aon_reg.h"
+#define APPFS_RTC_REG LP_AON_STORE0_REG
+#endif
 #endif
 
 #if !CONFIG_SPI_FLASH_WRITING_DANGEROUS_REGIONS_ALLOWED
@@ -290,8 +296,19 @@ size_t appfsGetTotalMem() {
 
 appfs_handle_t appfsBootselGet(bool* valid, char const** arg) {
 #if CONFIG_APPFS_USE_RTC_REG
-    ESP_LOGW(TAG, "App argument not supported with CONFIG_APPFS_USE_RTC_REG=y");
-    return -1;
+    // A single register has no room to store an argument string, so we can
+    // only report which app was selected, not what it was selected with.
+    uint32_t r = REG_READ(APPFS_RTC_REG);
+    if ((r & 0xFF000000) != 0xA5000000 && (r & 0xFF000000) != 0xA6000000) {
+        return APPFS_INVALID_FD;
+    }
+    if (valid) {
+        *valid = false;
+    }
+    if (arg) {
+        *arg = NULL;
+    }
+    return r & 0xff;
 #else
     // Obtain pointer to retained memory.
     rtc_retain_mem_t* mem = bootloader_common_get_rtc_retain_mem();
@@ -465,7 +482,9 @@ IRAM_ATTR void* appfsBlMmap(int fd) {
     cache_hal_disable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
 #endif
     int page = fd;
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
     int num_pages = 0;
+#endif
     for (int i = 0; i < 50; i++) {
         //		ESP_LOGI(TAG, "Mapping flash addr %X to mem addr %X for page %d",
         // appfsPartOffset+((pages[i]+1)*APPFS_SECTOR_SZ), SOC_DROM_LOW+(i*APPFS_SECTOR_SZ), pages[i]);
@@ -481,7 +500,9 @@ IRAM_ATTR void* appfsBlMmap(int fd) {
 #else
         uint32_t actual_sz;
         mmu_hal_map_region(0, MMU_TARGET_FLASH0, vaddr, paddr, APPFS_SECTOR_SZ, &actual_sz);
+#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
         num_pages++;
+#endif
 #endif
         page = next_page_for[page];
         if (page == 0) break;
@@ -581,7 +602,7 @@ bool appfsBootSelect(appfs_handle_t fd, char const* arg) {
     if (!appfsFdValid(fd)) return false;
 #if CONFIG_APPFS_USE_RTC_REG
     // Store FD in RTC register.
-    REG_WRITE(RTC_CNTL_STORE0_REG, 0xA5000000 | fd);
+    REG_WRITE(APPFS_RTC_REG, 0xA5000000 | fd);
     if (arg && strlen(arg) > 0) {
         ESP_LOGW(TAG, "App argument not supported with CONFIG_APPFS_USE_RTC_REG=y");
     }
