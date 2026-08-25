@@ -1,6 +1,9 @@
 
 import binascii
 
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Nicolai Electronics
+
 APPFS_SECTOR_SIZE = 64 * 1024
 APPFS_META_CNT = 2
 APPFS_META_DESC_SZ = 128
